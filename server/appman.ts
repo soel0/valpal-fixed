@@ -13,6 +13,14 @@ import {
 import type { User } from './userman';
 import { createTray, type Tray } from './tray';
 import WebSocket from 'ws';
+import { isAxiosError } from 'axios';
+
+function describeError(e: unknown) {
+	if (isAxiosError(e)) {
+		return `${e.config?.method?.toUpperCase()} ${e.config?.url?.split('?')[0]} -> ${e.response ? `HTTP ${e.response.status}` : e.code}`;
+	}
+	return e instanceof Error ? e.message : String(e);
+}
 
 function tryParseJson<T>(json: string): T | null {
 	try {
@@ -27,6 +35,7 @@ export class AppManager {
 	private isAgentDetectionEnabled = true;
 
 	private tray: Tray;
+	private wsErrorLogged = false;
 
 	constructor() {
 		this.tray = createTray(
@@ -49,12 +58,9 @@ export class AppManager {
 
 	async connect() {
 		try {
-			console.log('Attempting to connect to websocket');
-
 			const lockfile = await getLockfile();
 
 			if (!lockfile) {
-				console.log('Lockfile not found');
 				setTimeout(() => {
 					this.connect();
 				}, 5000);
@@ -70,10 +76,11 @@ export class AppManager {
 
 			ws.addEventListener('open', async () => {
 				try {
-					console.log('Connected to websocket');
+					console.log('Connecté au Riot Client, détection des parties active.');
+					this.wsErrorLogged = false;
 					ws.send(JSON.stringify([5, 'OnJsonApiEvent']));
 				} catch (e) {
-					console.warn('Caught error in websocket open handler', e);
+					console.warn('Erreur websocket (open) :', describeError(e));
 				}
 			});
 
@@ -143,28 +150,30 @@ export class AppManager {
 						}
 					}
 				} catch (e) {
-					console.warn('Caught error in websocket message handler:', e);
+					console.warn('Erreur pendant la sélection d\'agent / l\'équipement :', describeError(e));
 				}
 			});
 
 			ws.addEventListener('close', () => {
 				try {
 					abortController?.abort();
-					console.log('Disconnected from websocket');
 					setTimeout(() => {
 						this.connect();
 					}, 5000);
 				} catch (e) {
-					console.warn('Caught error in websocket close handler:', e);
+					console.warn('Erreur websocket (close) :', describeError(e));
 				}
 			});
 
 			ws.addEventListener('error', (err) => {
-				console.warn('WS error:', err);
+				if (!this.wsErrorLogged) {
+					console.warn('Connexion au Riot Client impossible :', err.message);
+					this.wsErrorLogged = true;
+				}
 				// this.notify('Websocket Error', err.message);
 			});
 		} catch (e) {
-			console.warn('Caught error in connect method:', e);
+			console.warn('Erreur de connexion :', describeError(e));
 		}
 	}
 
@@ -344,7 +353,7 @@ export class AppManager {
 			}),
 		};
 
-		console.log('Equipping loadout', loadoutToEquip);
+		console.log('Équipement du loadout', loadout.name);
 		await user.equipLoadout(loadoutToEquip);
 	}
 }
