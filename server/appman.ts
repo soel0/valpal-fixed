@@ -1,4 +1,3 @@
-import { NotifyIcon, Icon, Menu } from 'not-the-systray';
 import {
 	entitlementTypeToIdMap,
 	type Agent,
@@ -12,12 +11,8 @@ import {
 	randomItem,
 } from '~/utils.server';
 import type { User } from './userman';
-import { exec } from 'child_process';
+import { createTray, type Tray } from './tray';
 import WebSocket from 'ws';
-
-function open(url: string) {
-	exec(`start ${url}`);
-}
 
 function tryParseJson<T>(json: string): T | null {
 	try {
@@ -27,89 +22,30 @@ function tryParseJson<T>(json: string): T | null {
 	}
 }
 
-const notificationIcon = Icon.load(Icon.ids.info, Icon.large);
-
-const loadoutShufflingItemId = 1;
-const agentDetectionItemId = 2;
-const openItemId = 3;
-const quitItemId = 4;
-
 export class AppManager {
 	private isAutoShuffleEnabled = true;
 	private isAgentDetectionEnabled = true;
 
-	private appIcon = new NotifyIcon({
-		icon: Icon.load(Icon.ids.app, Icon.small),
-		tooltip: 'ValPal',
-		onSelect: ({ mouseX, mouseY }) => {
-			this.handleMenu(mouseX, mouseY);
-		},
-	});
-
-	private menu = new Menu([
-		{
-			id: openItemId,
-			text: 'Open ValPal',
-		},
-		{
-			id: loadoutShufflingItemId,
-			text: 'Loadout shuffling',
-			checked: true,
-		},
-		{
-			id: agentDetectionItemId,
-			text: 'Agent specific loadouts',
-			checked: true,
-		},
-		{
-			id: quitItemId,
-			text: 'Quit',
-		},
-	]);
+	private tray: Tray;
 
 	constructor() {
+		this.tray = createTray(
+			`http://localhost:${process.env.PORT || '3000'}`,
+			{
+				onToggleShuffle: (enabled) => {
+					this.isAutoShuffleEnabled = enabled;
+				},
+				onToggleAgentDetection: (enabled) => {
+					this.isAgentDetectionEnabled = enabled;
+				},
+			},
+		);
 		this.connect();
 	}
 
 	notify(title: string, text: string) {
-		this.appIcon.update({
-			notification: {
-				icon: notificationIcon,
-				title,
-				text,
-			},
-		});
+		this.tray.notify(title, text);
 	}
-
-	private handleMenu = (x: number, y: number) => {
-		const id = this.menu.showSync(x, y);
-		switch (id) {
-			case null: {
-				break;
-			}
-			case openItemId: {
-				open('http://localhost:3000');
-				break;
-			}
-			case loadoutShufflingItemId: {
-				const { checked } = this.menu.get(loadoutShufflingItemId);
-				this.menu.update(loadoutShufflingItemId, { checked: !checked });
-				this.isAutoShuffleEnabled = !checked;
-				break;
-			}
-			case agentDetectionItemId: {
-				const { checked } = this.menu.get(agentDetectionItemId);
-				this.menu.update(agentDetectionItemId, { checked: !checked });
-				this.isAgentDetectionEnabled = !checked;
-				break;
-			}
-			case quitItemId: {
-				this.appIcon.remove();
-				process.exit(0);
-				break;
-			}
-		}
-	};
 
 	async connect() {
 		try {

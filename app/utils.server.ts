@@ -23,6 +23,11 @@ async function exists(filename: string) {
 }
 
 export async function getLockfile() {
+	if (!process.env.LOCALAPPDATA) {
+		// Le client Riot n'existe que sous Windows
+		return;
+	}
+
 	const lockfilePath = path.resolve(
 		process.env.LOCALAPPDATA!,
 		'Riot Games',
