@@ -8,3 +8,5 @@
 user_*.json
 /dist/
 vite.config.ts.timestamp-*
+*.zip
+*.bundle
