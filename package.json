@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "cross-env NODE_ENV=development tsx server.ts",
+		"dev": "cross-env NODE_ENV=development node server.ts",
 		"build": "npm run build:web && npm run pkg",
 		"build:web": "npm run build:react-router && npm run build:server",
 		"build:react-router": "react-router build",
@@ -44,11 +44,10 @@
 		"@yao-pkg/pkg": "^6.2.0",
 		"autoprefixer": "^10.4.20",
 		"cross-env": "^7.0.3",
-		"esbuild": "^0.25.12",
+		"esbuild": "npm:esbuild-wasm@0.25.12",
 		"postcss": "^8.4.49",
 		"tailwind-scrollbar": "^3.1.0",
 		"tailwindcss": "^3.4.16",
-		"tsx": "^4.23.15",
 		"typescript": "^5.7.2",
 		"vite": "^5.4.11",
 		"vite-tsconfig-paths": "^5.1.4"
@@ -57,6 +56,10 @@
 		"not-the-systray": "^0.3.1"
 	},
 	"engines": {
-		"node": ">=20.19"
+		"node": ">=22.18"
+	},
+	"overrides": {
+		"rollup": "npm:@rollup/wasm-node@^4.64.3",
+		"esbuild": "npm:esbuild-wasm@0.25.12"
 	}
 }

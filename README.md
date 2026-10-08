@@ -25,7 +25,9 @@ This app is based around [Remix](https://remix.run) and packaged using [pkg](htt
 
 # Run locally (from source)
 
-Requirements: Windows (the game and Riot Client are needed for loadouts to be applied) and Node.js 20.19+ (LTS recommended).
+Requirements: Windows (the game and Riot Client are needed for loadouts to be applied) and Node.js 22.18+ (LTS recommended; `server.ts` runs with Node's built-in TypeScript support).
+
+Rollup and esbuild are overridden with their WebAssembly builds (`@rollup/wasm-node`, `esbuild-wasm`) so no unsigned native binaries are needed: this lets the app run on Windows with Smart App Control / application control policies enabled.
 
 Quick start on Windows: double-click `start-valpal.bat` (installs dependencies on first run, starts the server and opens the browser).
 

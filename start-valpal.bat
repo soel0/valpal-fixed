@@ -9,6 +9,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
+for /f "tokens=1 delims=v." %%v in ('node -v') do set NODE_MAJOR=%%v
+if %NODE_MAJOR% LSS 22 (
+  echo Node.js 22.18 ou plus recent est requis. Installez la version LTS sur https://nodejs.org
+  pause
+  exit /b 1
+)
+
 if not exist node_modules (
   echo Installation des dependances, premiere fois uniquement...
   call npm install
