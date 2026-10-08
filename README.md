@@ -47,3 +47,8 @@ The system tray icon (`not-the-systray`) is an optional Windows-only dependency:
 1. Clone this repo
 2. Follow "Run locally" above
 6. The configurator code mostly lives in app/ - the rest of the stuff is in server/ (such as the game detection, system tray stuff, etc)
+
+# Credits
+
+- Original project by [zachrip](https://github.com/zachrip/valpal), all the core features (loadout configurator, agent detection, randomization) are his work.
+- October 2026 update (runs on current Node/npm, Windows Smart App Control compatibility, reliable region detection) by Soel, with fixes written by Claude (Anthropic's AI assistant).
