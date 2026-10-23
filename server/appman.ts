@@ -22,6 +22,18 @@ function describeError(e: unknown) {
 	return e instanceof Error ? e.message : String(e);
 }
 
+function countSkinDifferences(
+	sent: ValorantLoadout['Guns'],
+	actual: ValorantLoadout['Guns'] | undefined,
+): number | null {
+	if (!Array.isArray(actual)) return null;
+	const actualById = new Map(actual.map((g) => [g.ID, g]));
+	return sent.filter((g) => {
+		const a = actualById.get(g.ID);
+		return !a || a.SkinID !== g.SkinID || a.ChromaID !== g.ChromaID;
+	}).length;
+}
+
 function tryParseJson<T>(json: string): T | null {
 	try {
 		return JSON.parse(json);
@@ -111,19 +123,17 @@ export class AppManager {
 					const uriMatch = uri.match(/\/pregame\/v1\/matches\/(.*)/);
 					if (eventType === 'Create' && uriMatch && uriMatch[1]) {
 						const matchId = uriMatch[1];
-						console.log('Match found:', matchId);
 
 						const existingState = matchCharacterSelectionStates.get(matchId);
 
 						if (existingState === 'locked') {
-							console.log('Match already locked, no need to process');
 							return;
 						}
 
 						const user = await getUser();
 
 						if (!user) {
-							console.log('User not found');
+							console.log('Partie détectée mais joueur introuvable.');
 							return;
 						}
 
@@ -139,14 +149,29 @@ export class AppManager {
 							newState &&
 							newState !== matchCharacterSelectionStates.get(matchId)
 						) {
-							if (newState === 'locked' && this.isAutoShuffleEnabled) {
-								this.equip(
-									user,
-									this.isAgentDetectionEnabled ? player.CharacterID : undefined,
-								);
-							}
-
 							matchCharacterSelectionStates.set(matchId, newState);
+
+							if (newState === 'locked') {
+								const agentName =
+									valorantData.agents.find((a) => a.uuid === player.CharacterID)
+										?.displayName ?? player.CharacterID;
+								console.log(`Agent verrouillé : ${agentName}`);
+
+								if (!this.isAutoShuffleEnabled) {
+									console.log('Changement auto désactivé, rien à équiper.');
+								} else {
+									try {
+										await this.equip(
+											user,
+											this.isAgentDetectionEnabled
+												? player.CharacterID
+												: undefined,
+										);
+									} catch (e) {
+										console.warn('Échec de l\'équipement :', describeError(e));
+									}
+								}
+							}
 						}
 					}
 				} catch (e) {
@@ -224,7 +249,7 @@ export class AppManager {
 		}
 
 		const loadout = randomItem(loadoutsToConsider);
-		this.equipLoadout(user, loadout);
+		await this.equipLoadout(user, loadout);
 	};
 
 	async equipLoadout(user: User, loadout: Loadout) {
@@ -250,6 +275,9 @@ export class AppManager {
 				PlayerCardID:
 					randomItem(loadout.playerCardIds) ||
 					'9fb348bc-41a0-91ad-8a3e-818035c4e561',
+				PlayerTitleID:
+					randomItem(loadout.playerTitleIds) ||
+					existingLoadout.Identity.PlayerTitleID,
 			},
 			ActiveExpressions: [
 				randomItem([
@@ -305,12 +333,28 @@ export class AppManager {
 					AssetID: 'af52b5a0-4a4c-03b2-c9d7-8187a08a2675',
 				},
 			],
-			Guns: Object.entries(loadout.weapons).map(([weaponId, { templates }]) => {
+			// On part de la liste complète renvoyée par Riot : une arme absente
+			// de la config (ex. Bandit, ajouté en 2026) garde son skin actuel au
+			// lieu de disparaître du loadout envoyé.
+			Guns: existingLoadout.Guns.map((gun) => {
+				const weaponId = gun.ID;
+				const configured = loadout.weapons[weaponId];
+
+				if (!configured) {
+					return gun;
+				}
+
+				const { templates } = configured;
+
 				if (!templates.length) {
-					const weapon = weapons.find((w) => w.uuid === weaponId)!;
-					const skin = weapon.skins.find(
+					const weapon = weapons.find((w) => w.uuid === weaponId);
+					const skin = weapon?.skins.find(
 						(s) => s.uuid === weapon.defaultSkinUuid,
-					)!;
+					);
+
+					if (!skin) {
+						return gun;
+					}
 
 					return {
 						ID: weaponId,
@@ -353,7 +397,35 @@ export class AppManager {
 			}),
 		};
 
-		console.log('Équipement du loadout', loadout.name);
-		await user.equipLoadout(loadoutToEquip);
+		console.log(`Équipement du loadout "${loadout.name}"...`);
+		const saved = await user.equipLoadout(loadoutToEquip);
+
+		const notApplied = countSkinDifferences(loadoutToEquip.Guns, saved?.Guns);
+		if (notApplied === null) {
+			console.log('Loadout envoyé à Riot.');
+		} else if (notApplied === 0) {
+			console.log('Loadout accepté par Riot.');
+		} else {
+			console.warn(
+				`Riot a accepté la requête mais ${notApplied} arme(s) n'ont pas pris le skin demandé.`,
+			);
+		}
+
+		// Vérification différée : si le jeu remet l'ancien loadout, on le saura.
+		setTimeout(async () => {
+			try {
+				const current = await user.getLoadout();
+				const reverted = countSkinDifferences(loadoutToEquip.Guns, current.Guns);
+				if (reverted) {
+					console.warn(
+						`Attention : ${reverted} arme(s) sont revenues à un autre skin depuis l'équipement (remis par le jeu ?).`,
+					);
+				} else {
+					console.log('Vérification : le loadout est toujours en place.');
+				}
+			} catch (e) {
+				console.log('Vérification du loadout impossible :', describeError(e));
+			}
+		}, 45_000);
 	}
 }

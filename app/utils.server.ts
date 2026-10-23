@@ -69,6 +69,14 @@ export function randomItem<T>(array: T[]) {
 }
 
 export function getDefaultLoadout(): Loadout {
+	const loadout = getBaseDefaultLoadout();
+	for (const weapon of global.valorantData?.weapons ?? []) {
+		loadout.weapons[weapon.uuid] ??= { templates: [] };
+	}
+	return loadout;
+}
+
+function getBaseDefaultLoadout(): Loadout {
 	return {
 		id: randomUUID(),
 		name: 'Default Loadout',
@@ -204,7 +212,20 @@ export async function getUserConfig(userId: string): Promise<UserConfig> {
 		await writeTextFile(userFilenamePath, JSON.stringify(newConfig));
 	}
 
-	return migrateConfig(JSON.parse(await readTextFile(userFilenamePath)));
+	const config: UserConfig = migrateConfig(
+		JSON.parse(await readTextFile(userFilenamePath)),
+	);
+
+	// Armes ajoutées par Riot après la création de la config (ex. Bandit en
+	// 2026) : on les ajoute pour qu'elles apparaissent dans le configurateur.
+	const currentWeaponIds = global.valorantData?.weapons.map((w) => w.uuid) ?? [];
+	for (const loadout of config.loadouts) {
+		for (const weaponId of currentWeaponIds) {
+			loadout.weapons[weaponId] ??= { templates: [] };
+		}
+	}
+
+	return config;
 }
 
 export async function saveUserConfig(
