@@ -1,6 +1,5 @@
 import {
 	entitlementTypeToIdMap,
-	type Agent,
 	type ValorantLoadout,
 } from 'types';
 import type { Loadout } from '~/utils';
@@ -20,6 +19,17 @@ function describeError(e: unknown) {
 		return `${e.config?.method?.toUpperCase()} ${e.config?.url?.split('?')[0]} -> ${e.response ? `HTTP ${e.response.status}` : e.code}`;
 	}
 	return e instanceof Error ? e.message : String(e);
+}
+
+function sameId(a: string | undefined, b: string | undefined) {
+	return !!a && !!b && a.toLowerCase() === b.toLowerCase();
+}
+
+/** Nom de l'agent, ou son identifiant brut s'il est inconnu (nouvel agent...). */
+function agentLabel(agentId: string | undefined) {
+	if (!agentId) return 'agent inconnu';
+	const agent = valorantData.agents.find((a) => sameId(a.uuid, agentId));
+	return agent ? agent.displayName : `agent inconnu (${agentId})`;
 }
 
 function countSkinDifferences(
@@ -152,10 +162,7 @@ export class AppManager {
 							matchCharacterSelectionStates.set(matchId, newState);
 
 							if (newState === 'locked') {
-								const agentName =
-									valorantData.agents.find((a) => a.uuid === player.CharacterID)
-										?.displayName ?? player.CharacterID;
-								console.log(`Agent verrouillé : ${agentName}`);
+								console.log(`Agent verrouillé : ${agentLabel(player.CharacterID)}`);
 
 								if (!this.isAutoShuffleEnabled) {
 									console.log('Changement auto désactivé, rien à équiper.');
@@ -204,47 +211,30 @@ export class AppManager {
 
 	equip = async (user: User, agentId?: string) => {
 		const config = await getUserConfig(user.userId);
+		const enabledLoadouts = config.loadouts.filter((loadout) => loadout.enabled);
 
-		const agent: Agent | undefined = valorantData.agents.find(
-			(a) => a.uuid === agentId,
-		)!;
-
-		const loadoutsToConsider = (function (
-			loadouts: Loadout[],
-			agentId?: string,
-		) {
+		const loadoutsToConsider = (() => {
 			if (!agentId) {
-				console.log('No agent specified, considering all loadouts.');
-				return loadouts;
+				return enabledLoadouts;
 			}
 
-			const agentSpecificLoadouts = loadouts.filter((l) =>
-				l.agentIds.includes(agentId),
+			const agentSpecificLoadouts = enabledLoadouts.filter((l) =>
+				l.agentIds.some((id) => sameId(id, agentId)),
 			);
 
 			if (agentSpecificLoadouts.length === 0) {
 				console.log(
-					'No loadouts for',
-					agentId,
-					`(${agent.displayName})`,
-					'falling back to all loadouts.',
+					`Aucun loadout spécifique à ${agentLabel(agentId)}, choix parmi tous les loadouts activés.`,
 				);
-				return loadouts;
+				return enabledLoadouts;
 			}
 
-			console.log(
-				'Only considering loadouts for',
-				agentId,
-				`(${agent.displayName})`,
-			);
+			console.log(`Loadouts spécifiques à ${agentLabel(agentId)} utilisés.`);
 			return agentSpecificLoadouts;
-		})(
-			config.loadouts.filter((loadout) => loadout.enabled),
-			agentId,
-		);
+		})();
 
 		if (loadoutsToConsider.length === 0) {
-			console.log('No loadouts, not equipping.');
+			console.log('Aucun loadout activé, rien à équiper.');
 			return;
 		}
 
